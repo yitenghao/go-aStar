@@ -89,12 +89,12 @@ func main() {
 	background.Move(points, color.RGBA{255, 0, 0, 255})
 	gifAppendImage(GIF, background.Src)
 
-	g,err:=os.Create("./move.gif")
-	if err!=nil{
-		logx.Errorf("Create move.gif err:%s\n",err.Error())
+	g, err := os.Create("./move.gif")
+	if err != nil {
+		logx.Errorf("Create move.gif err:%s\n", err.Error())
 	}
-	if err=gif.EncodeAll(g,GIF);err!=nil{
-		logx.Errorf("gif encodeAll err:%s\n",err.Error())
+	if err = gif.EncodeAll(g, GIF); err != nil {
+		logx.Errorf("gif encodeAll err:%s\n", err.Error())
 		return
 	}
 }

@@ -11,8 +11,8 @@ import (
 )
 
 type Background struct {
-	Src          *image.Paletted // 背景图像
-	Stride       int         // 每个格子的长度
+	Src    *image.Paletted // 背景图像
+	Stride int             // 每个格子的长度
 }
 
 func InitBackground(stride, widht, hight int, sub image.Image) *Background {
@@ -22,8 +22,7 @@ func InitBackground(stride, widht, hight int, sub image.Image) *Background {
 	src := image.NewPaletted(image.Rectangle{
 		Min: image.Point{},
 		Max: image.Point{X: widht * stride, Y: hight * stride},
-	},palette.Plan9)
-
+	}, palette.Plan9)
 
 	// 合成背景图
 	for i := 0; i < hight; i++ {
@@ -35,12 +34,13 @@ func InitBackground(stride, widht, hight int, sub image.Image) *Background {
 		}
 	}
 	return &Background{
-		Src:          src,
-		Stride:       stride,
+		Src:    src,
+		Stride: stride,
 	}
 }
+
 // 白底空心盒子
-func GenerateHollowBox(stride int,c color.Color)image.Image{
+func GenerateHollowBox(stride int, c color.Color) image.Image {
 	r := image.Rectangle{
 		Min: image.Point{},
 		Max: image.Point{X: stride, Y: stride},
@@ -51,28 +51,30 @@ func GenerateHollowBox(stride int,c color.Color)image.Image{
 		for j := 0; j < stride; j++ {
 			if i == 0 || i == stride-1 || j == 0 || j == stride-1 {
 				box.Set(j, i, c)
-			}else{
-				box.Set(j,i,color.White)
+			} else {
+				box.Set(j, i, color.White)
 			}
 		}
 	}
 	return box
 }
+
 // 实心盒子
-func GenerateSolidBox(stride int,c color.Color)image.Image{
+func GenerateSolidBox(stride int, c color.Color) image.Image {
 	r := image.Rectangle{
 		Min: image.Point{},
 		Max: image.Point{X: stride, Y: stride},
 	}
-	box := image.NewPaletted(r,color.Palette{c})
+	box := image.NewPaletted(r, color.Palette{c})
 	return box
 }
+
 // Rand 渲染一副图片
 func (b *Background) Rand(w io.Writer) error {
 	return png.Encode(w, b.Src)
 }
 
-func (b *Background) Next(p image.Point,sub image.Image) {
+func (b *Background) Next(p image.Point, sub image.Image) {
 	min := image.Point{X: p.X * b.Stride, Y: p.Y * b.Stride}
 	max := min.Add(image.Point{X: b.Stride, Y: b.Stride})
 	rectangle := image.Rectangle{Min: min, Max: max}
@@ -97,7 +99,7 @@ func (b *Background) Move(points []image.Point, c color.RGBA) {
 		Min: image.Point{0, 0},
 		Max: image.Point{b.Stride + 1, 1},
 	}
-	center := b.Stride / 2+1
+	center := b.Stride/2 + 1
 	for i, p := range points {
 		if i == 0 {
 			lastPoint = image.Point{p.X*b.Stride + center - 1, p.Y*b.Stride + center - 1}
@@ -106,25 +108,25 @@ func (b *Background) Move(points []image.Point, c color.RGBA) {
 			nowPoint := image.Point{p.X*b.Stride + center - 1, p.Y*b.Stride + center - 1}
 			xSub := nowPoint.X - lastPoint.X
 			ySub := nowPoint.Y - lastPoint.Y
-			r:=image.Rectangle{}
+			r := image.Rectangle{}
 			if xSub == 0 {
 				if ySub > 0 { // down
-					r=down.Add(lastPoint)
+					r = down.Add(lastPoint)
 				} else if ySub < 0 { // up
-					r=up.Add(lastPoint)
+					r = up.Add(lastPoint)
 				}
 			} else if ySub == 0 {
 				if xSub > 0 { // right
-					r=right.Add(lastPoint)
+					r = right.Add(lastPoint)
 				} else if xSub < 0 { // left
-					r=left.Add(lastPoint)
+					r = left.Add(lastPoint)
 				}
 			} else {
 				logx.Warnf("move err\n")
 			}
 			sub := image.NewUniform(c)
 			draw.Draw(b.Src, r, sub, image.Point{}, draw.Src)
-			lastPoint=nowPoint
+			lastPoint = nowPoint
 		}
 	}
 }
