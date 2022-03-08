@@ -1,7 +1,6 @@
 package rander
 
 import (
-	"github.com/linnv/logx"
 	"image"
 	"image/color"
 	"image/color/palette"
@@ -69,6 +68,46 @@ func GenerateSolidBox(stride int, c color.Color) image.Image {
 	return box
 }
 
+// 向↘宽度为1的线
+func GenerateDownRightLine(stride int, c color.Color) image.Image {
+	r := image.Rectangle{
+		Min: image.Point{},
+		Max: image.Point{X: stride, Y: stride},
+	}
+	box := image.NewPaletted(r,color.Palette{c,color.Transparent})
+	// 设置边框颜色
+	for i := 0; i < stride; i++ {
+		for j := 0; j < stride; j++ {
+			if i == j {
+				box.Set(j, i, c)
+			} else {
+				box.Set(j, i, color.Transparent)
+			}
+		}
+	}
+	return box
+}
+
+// 向↗宽度为1的线
+func GenerateUpRightLine(stride int, c color.Color) image.Image {
+	r := image.Rectangle{
+		Min: image.Point{},
+		Max: image.Point{X: stride, Y: stride},
+	}
+	box := image.NewRGBA(r)
+	// 设置边框颜色
+	for i := 0; i < stride; i++ {
+		for j := 0; j < stride; j++ {
+			if i+j == stride-1 {
+				box.Set(j, i, c)
+			} else {
+				box.Set(j, i, color.Transparent)
+			}
+		}
+	}
+	return box
+}
+
 // Rand 渲染一副图片
 func (b *Background) Rand(w io.Writer) error {
 	return png.Encode(w, b.Src)
@@ -83,24 +122,42 @@ func (b *Background) Next(p image.Point, sub image.Image) {
 
 func (b *Background) Move(points []image.Point, c color.RGBA) {
 	lastPoint := image.Point{}
+	upLeft := image.Rectangle{
+		Min: image.Point{-b.Stride, -b.Stride},
+		Max: image.Point{1, 1},
+	}
 	up := image.Rectangle{
 		Min: image.Point{0, -b.Stride},
 		Max: image.Point{1, 1},
 	}
+	upRight := image.Rectangle{
+		Min: image.Point{0, -b.Stride},
+		Max: image.Point{b.Stride + 1, 1},
+	}
+	right := image.Rectangle{
+		Min: image.Point{0, 0},
+		Max: image.Point{b.Stride + 1, 1},
+	}
+	downRight := image.Rectangle{
+		Min: image.Point{0, 0},
+		Max: image.Point{b.Stride + 1, b.Stride + 1},
+	}
 	down := image.Rectangle{
 		Min: image.Point{0, 0},
+		Max: image.Point{1, b.Stride + 1},
+	}
+	downLeft := image.Rectangle{
+		Min: image.Point{-b.Stride, 0},
 		Max: image.Point{1, b.Stride + 1},
 	}
 	left := image.Rectangle{
 		Min: image.Point{-b.Stride, 0},
 		Max: image.Point{1, 1},
 	}
-	right := image.Rectangle{
-		Min: image.Point{0, 0},
-		Max: image.Point{b.Stride + 1, 1},
-	}
+	var sub image.Image
 	center := b.Stride/2 + 1
 	for i, p := range points {
+		sub = image.NewUniform(c)
 		if i == 0 {
 			lastPoint = image.Point{p.X*b.Stride + center - 1, p.Y*b.Stride + center - 1}
 			b.Src.Set(lastPoint.X, lastPoint.Y, c)
@@ -122,10 +179,22 @@ func (b *Background) Move(points []image.Point, c color.RGBA) {
 					r = left.Add(lastPoint)
 				}
 			} else {
-				logx.Warnf("move err\n")
+				if xSub > 0 && ySub > 0 { // downRight
+					sub = GenerateDownRightLine(b.Stride+1, c)
+					r = downRight.Add(lastPoint)
+				} else if xSub > 0 && ySub < 0 { // upRight
+					sub = GenerateUpRightLine(b.Stride+1, c)
+					r = upRight.Add(lastPoint)
+				} else if xSub < 0 && ySub < 0 { // upLeft
+					sub = GenerateDownRightLine(b.Stride+1, c)
+					r = upLeft.Add(lastPoint)
+				} else if xSub < 0 && ySub > 0 { // downLeft
+					sub = GenerateUpRightLine(b.Stride+1, c)
+					r = downLeft.Add(lastPoint)
+				}
 			}
-			sub := image.NewUniform(c)
-			draw.Draw(b.Src, r, sub, image.Point{}, draw.Src)
+
+			draw.Draw(b.Src, r, sub, image.Point{}, draw.Over)
 			lastPoint = nowPoint
 		}
 	}

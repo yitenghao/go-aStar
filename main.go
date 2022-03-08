@@ -1,13 +1,17 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/linnv/logx"
 	"image"
 	"image/color"
 	"image/gif"
+	"image/png"
+	"math"
 	"os"
 	"test/aStar/rander"
+	"time"
 )
 
 type Point struct {
@@ -16,31 +20,31 @@ type Point struct {
 
 var open, close = []element{}, []element{}
 var start = element{"", Point{1, 1}, 0, 0, 0}
-var end = element{"", Point{1, 8}, 0, 0, 0}
-var direction = []string{"↑", "→", "↓", "←"}
+var end = element{"", Point{148, 148}, 0, 0, 0}
+var direction = []string{"↖", "↑", "↗", "→", "↘", "↓", "↙", "←"}
 
 var background *rander.Background
 var GIF *gif.GIF
 
 type element struct {
-	Direction string // ↑ → ↓ ← 方向
+	Direction string // ↖ ↑ ↗ → ↘ ↓ ↙ ← 方向
 	P         Point  // 坐标
 	F         int    // 和值  已走步数+预计还需步数
 	G         int    // 已走步数
 	H         int    // 预计还需步数
 }
 
-func Init() {
-	stride := 10 // 地图的每个点对应到图像中的格子的长度
-	x := len(maps[0])
-	y := len(maps)
+func randerInit(grid [][]int) {
+	stride := 9 // 地图的每个点对应到图像中的格子的长度
+	x := len(grid[0])
+	y := len(grid)
 	box := rander.GenerateSolidBox(stride, color.Black)
 	pathBox := rander.GenerateHollowBox(stride, color.RGBA{147, 161, 161, 255})
 	startBox := rander.GenerateHollowBox(stride, color.RGBA{0, 0, 255, 255})
 	background = rander.InitBackground(stride, x, y, box)
 
-	for i := 0; i < len(maps); i++ {
-		line := maps[i]
+	for i := 0; i < len(grid); i++ {
+		line := grid[i]
 		for j := 0; j < len(line); j++ {
 			switch line[j] {
 			case 0:
@@ -50,6 +54,10 @@ func Init() {
 			}
 		}
 	}
+	{
+		f, _ := os.Create("./background.png")
+		png.Encode(f, background.Src)
+	}
 	GIF = &gif.GIF{
 		Image:     []*image.Paletted{},
 		Delay:     []int{},
@@ -57,9 +65,13 @@ func Init() {
 	}
 	gifAppendImage(GIF, background.Src)
 }
+
+var NotPath = errors.New("无路可走")
+
 func main() {
+	startTime := time.Now()
 	defer logx.Flush()
-	Init()
+	randerInit(maps)
 	start.G = 0
 	start.H = compuntH(start.P, end.P)
 	start.F = start.G + start.H
@@ -69,21 +81,25 @@ func main() {
 		nextElement, err = next(nextElement)
 		if err != nil {
 			logx.Warnf("next:%+v,%s\n", nextElement, err.Error())
+			if err == NotPath {
+				return
+			}
 			break
 		}
 	}
-
-	closePoints := element2ImagePoint(close)
-	closeBox := rander.GenerateSolidBox(background.Stride, color.RGBA{0, 255, 0, 255})
-	for _, p := range closePoints {
-		background.Next(p, closeBox)
-		gifAppendImage(GIF, background.Src)
-	}
-
+	success := time.Now()
 	bestPath := getBestMovePath(close)
 	for _, item := range bestPath {
 		fmt.Printf("向%s移动，到达%v，和值：%d，步数：%d\n", item.Direction, item.P, item.F, item.G)
 	}
+	bestTime := time.Now()
+	fmt.Printf("寻路耗时：%.02f,\n求最佳路径耗时：%.02f，移动%d次,最短路径移动%d次\n", success.Sub(startTime).Seconds(), bestTime.Sub(success).Seconds(), len(close),len(bestPath))
+	//closePoints := element2ImagePoint(close)
+	//closeBox := rander.GenerateSolidBox(background.Stride, color.RGBA{0, 255, 0, 255})
+	//for _, p := range closePoints {
+	//	background.Next(p, closeBox)
+	//	gifAppendImage(GIF, background.Src)
+	//}
 
 	points := element2ImagePoint(bestPath)
 	background.Move(points, color.RGBA{255, 0, 0, 255})
@@ -97,6 +113,7 @@ func main() {
 		logx.Errorf("gif encodeAll err:%s\n", err.Error())
 		return
 	}
+	fmt.Printf("绘制耗时：%.02f\n", time.Now().Sub(bestTime).Seconds())
 }
 
 func next(s element) (element, error) {
@@ -125,6 +142,9 @@ func next(s element) (element, error) {
 		} else {
 			open = Append(open, nextElement)
 		}
+	}
+	if len(open) == 0 {
+		return s, NotPath
 	}
 	return open[len(open)-1], nil
 }
@@ -177,30 +197,50 @@ func updateElement(list []element, item element) {
 func elementMove(s element, direction string) (element, error) {
 	nextElement := element{
 		Direction: direction,
-		G:         s.G + 1,
 	}
 	switch direction {
+	case "↖":
+		nextElement.P = Point{
+			X: s.P.X - 1,
+			Y: s.P.Y - 1,
+		}
 	case "↑":
 		nextElement.P = Point{
 			X: s.P.X - 1,
 			Y: s.P.Y,
 		}
-	case "↓":
+	case "↗":
 		nextElement.P = Point{
-			X: s.P.X + 1,
-			Y: s.P.Y,
-		}
-	case "←":
-		nextElement.P = Point{
-			X: s.P.X,
-			Y: s.P.Y - 1,
+			X: s.P.X - 1,
+			Y: s.P.Y + 1,
 		}
 	case "→":
 		nextElement.P = Point{
 			X: s.P.X,
 			Y: s.P.Y + 1,
 		}
+	case "↘":
+		nextElement.P = Point{
+			X: s.P.X + 1,
+			Y: s.P.Y + 1,
+		}
+	case "↓":
+		nextElement.P = Point{
+			X: s.P.X + 1,
+			Y: s.P.Y,
+		}
+	case "↙":
+		nextElement.P = Point{
+			X: s.P.X + 1,
+			Y: s.P.Y - 1,
+		}
+	case "←":
+		nextElement.P = Point{
+			X: s.P.X,
+			Y: s.P.Y - 1,
+		}
 	}
+	nextElement.G = s.G + compuntH(nextElement.P, s.P)
 	nextElement.H = compuntH(nextElement.P, end.P)
 	nextElement.F = nextElement.G + nextElement.H
 	if nextElement.P.X > len(maps[0])-1 || nextElement.P.X < 0 || nextElement.P.Y > len(maps)-1 || nextElement.P.Y < 0 {
@@ -231,7 +271,8 @@ func compuntH(x, e Point) int {
 	if b < 0 {
 		b = -b
 	}
-	return a + b
+
+	return int(math.Hypot(float64(a), float64(b)) * 10)
 }
 
 // 获取最佳移动路径
@@ -242,7 +283,7 @@ func getBestMovePath(list []element) []element {
 		if lastPathIndex != -1 {
 			path := allPath[lastPathIndex]
 			lastEle := path[len(path)-1]
-			if lastEle.G+1 == ele.G && compuntH(lastEle.P, ele.P) == 1 {
+			if (lastEle.G+10 == ele.G && compuntH(lastEle.P, ele.P) == 10) || (lastEle.G+14 == ele.G && compuntH(lastEle.P, ele.P) == 14) {
 				allPath[lastPathIndex] = append(allPath[lastPathIndex], ele)
 				continue
 			}
@@ -250,7 +291,7 @@ func getBestMovePath(list []element) []element {
 		has := false
 		for index, path := range allPath {
 			lastEle := path[len(path)-1]
-			if lastEle.G+1 == ele.G && compuntH(lastEle.P, ele.P) == 1 {
+			if (lastEle.G+10 == ele.G && compuntH(lastEle.P, ele.P) == 10) || (lastEle.G+14 == ele.G && compuntH(lastEle.P, ele.P) == 14) {
 				allPath[index] = append(allPath[index], ele)
 				lastPathIndex = index
 				has = true
@@ -271,25 +312,45 @@ func getLeft(allPath [][]element, s element) []element {
 	}
 	ele := Point{}
 	switch s.Direction {
+	case "↖":
+		ele = Point{
+			X: s.P.X + 1,
+			Y: s.P.Y + 1,
+		}
 	case "↑":
 		ele = Point{
 			X: s.P.X + 1,
 			Y: s.P.Y,
+		}
+	case "↗":
+		ele = Point{
+			X: s.P.X + 1,
+			Y: s.P.Y - 1,
+		}
+	case "→":
+		ele = Point{
+			X: s.P.X,
+			Y: s.P.Y - 1,
+		}
+	case "↘":
+		ele = Point{
+			X: s.P.X - 1,
+			Y: s.P.Y - 1,
 		}
 	case "↓":
 		ele = Point{
 			X: s.P.X - 1,
 			Y: s.P.Y,
 		}
+	case "↙":
+		ele = Point{
+			X: s.P.X - 1,
+			Y: s.P.Y + 1,
+		}
 	case "←":
 		ele = Point{
 			X: s.P.X,
 			Y: s.P.Y + 1,
-		}
-	case "→":
-		ele = Point{
-			X: s.P.X,
-			Y: s.P.Y - 1,
 		}
 	}
 	for _, path := range allPath {
@@ -320,5 +381,5 @@ func gifAppendImage(g *gif.GIF, p *image.Paletted) {
 	}
 
 	g.Image = append(g.Image, newPaletted)
-	g.Delay = append(g.Delay, 100)
+	g.Delay = append(g.Delay, 1)
 }
